@@ -3,6 +3,7 @@
 
 const planLayers = [];
 const planviewCount = [];
+const markerLayers = [];
 
 const loadingModal = document.getElementById('loadingModal');
 let center_lat = 0;
@@ -29,6 +30,14 @@ view: new ol.View({
 }),
 });
 
+const markerimg = new ol.style.Icon({
+    anchor: [0.5, 1], // 이미지 앵커 위치
+    src: 'https://cdn-icons-png.flaticon.com/512/684/684908.png', // 마커 이미지 URL
+    scale: 0.06 // 크기 조정
+})
+
+
+
 export function moveview(lat,log) {
 
     center_lat = lat*1.0;
@@ -43,7 +52,6 @@ homeButton.addEventListener('click', function(e) {
 function SetViewCenter()
 {
     const center = ol.proj.transform([center_lon,center_lat], 'EPSG:4326','EPSG:3857');
-    console.log(center);
     map.getView().setCenter(center); // 지도 시점 변경
     map.getView().setZoom(18); // 줌 레벨 설
 }
@@ -75,8 +83,6 @@ export function addplanview(image,minLat,minLon,maxLat,maxLon,index) {
     const max = new ol.proj.transform([maxLon,maxLat], 'EPSG:4326','EPSG:3857');
     const imageExtent2 = [min[0],min[1],max[0],max[1]];
 
-    // console.log(imageExtent2)
-
     const imageLayer = new ol.layer.Image({ //png파일, jpeg파일 
         source : new ol.source.ImageStatic({
             url : `data:image/png;base64,${base64Image}`, 
@@ -84,11 +90,8 @@ export function addplanview(image,minLat,minLon,maxLat,maxLon,index) {
             projection : "EPSG:3857",
         }),
         opacity:opacity,
+        zIndex:0
     });
-
-    // imageLayer.onload = () => {
-    //     console.log('Image loaded');
-    // };
 
     planLayers[index].push(imageLayer);
 
@@ -102,30 +105,65 @@ export function addplanview(image,minLat,minLon,maxLat,maxLon,index) {
 }
 
 
+export function addplanview_ani(image,minLat,minLon,maxLat,maxLon,index) {
+
+    const base64Image = image;
+    const min = new ol.proj.transform([minLon,minLat], 'EPSG:4326','EPSG:3857');
+    const max = new ol.proj.transform([maxLon,maxLat], 'EPSG:4326','EPSG:3857');
+    const imageExtent2 = [min[0],min[1],max[0],max[1]];
+
+    const imageLayer = new ol.layer.Image({ //png파일, jpeg파일 
+        source : new ol.source.ImageStatic({
+            url : `data:image/png;base64,${base64Image}`, 
+            imageExtent: imageExtent2,
+            projection : "EPSG:3857",
+        }),
+        opacity:opacity,
+        zIndex:0
+    });
+
+    planLayers[index].push(imageLayer);
+
+    if(planLayers[index].length == planviewCount[index])
+    {
+        aniCount++;
+        for(let i = 0 ; i < planLayers[index].length;i++)
+        {
+            map.addLayer(planLayers[index][i]);
+        }
+
+        if(aniCount == aniMaxCount)
+        {
+            console.log('ani_end');
+            window.chrome.webview.postMessage('d');
+        }
+    }
+}
+
+
+
 export function setplanviewCount(count, count2) {
 
     planLayers.length = 0;
+    markerLayers.length = 0;
 
     const vv = count*1;
 
-    for(let i = 0 ; i < count;i++)
+    for(let i = 0 ; i < vv;i++)
     {
         const value = count2[i]*1;
         planviewCount.push(value);
 
         const imgs = [];
-
+        const markers = [];
         planLayers.push(imgs);
+        markerLayers.push(markers);
     }
-    console.log(planviewCount);
 }
 
 
 
 export function clearplanview() {
-
-
-
     for(let i = 0 ; i < planLayers.length;i++)
     {
         for(let j = 0 ; j < planLayers[i].length;j++)
@@ -151,79 +189,110 @@ export function SetOpacity(value) {
 }
 
 
+function sendMessageToCSharp() {
+    // C#으로 메시지 전송
+    window.chrome.webview.postMessage('Hello from JavaScript!');
+}
+
+
+// const markerStyle = new ol.style.Style({
+//     image: new ol.style.Icon({
+//         anchor: [0.5, 1],
+//         src: 'https://cdn-icons-png.flaticon.com/512/684/684908.png', // 마커 이미지 URL
+//         scale: 0.06 // 크기 조정
+//     }),
+//     text: new ol.style.Text({
+//         text: 'asd', // 표시할 텍스트
+//         font: '14px Arial', // 글꼴과 크기
+//         fill: new ol.style.Fill({ color: '#000' }), // 텍스트 색상
+//         stroke: new ol.style.Stroke({ color: '#fff', width: 2 }), // 텍스트 외곽선
+//         offsetY: -40 // 텍스트 위치 조정 (마커 위로)
+//     })
+// });
+
+export function setmarker(index,lats,logs,names) {
+
+    index = index*1;
+    console.log('setmarker');
+    console.log(names);
+    let temp = names.split(",");
+    console.log(temp);
+    for(let i = 0 ; i < lats.length;i++)
+    {
+        const lat = lats[i]*1.0;
+        const log = logs[i]*1.0;
+
+        const markerStyle = new ol.style.Style({
+            image: markerimg,
+            text: new ol.style.Text({
+                text: temp[i], // 표시할 텍스트
+                font: '14px Arial', // 글꼴과 크기
+                fill: new ol.style.Fill({ color: '#000' }), // 텍스트 색상
+                stroke: new ol.style.Stroke({ color: '#fff', width: 2 }), // 텍스트 외곽선
+                offsetY: -40 // 텍스트 위치 조정 (마커 위로)
+            })
+        });
+
+        const marker = new ol.Feature({
+            geometry: new ol.geom.Point(ol.proj.transform([log,lat], 'EPSG:4326','EPSG:3857')) // 마커 위치
+        });
+        // 스타일 적용
+        marker.setStyle(markerStyle);
+    
+        // 벡터 소스 및 레이어 생성
+        const vectorSource = new ol.source.Vector({
+            features: [marker] // 마커 추가
+        });
+
+        const vectorLayer = new ol.layer.Vector({
+            source: vectorSource,
+            zIndex:10
+        });
+
+        markerLayers[index].push(vectorLayer);
+    }
+    console.log(index);
+    console.log(markerLayers[index]);
+}
+
+export function onmarker(index) {
+    console.log(index);
+    index = index*1;
+    for(let i = 0 ; i < markerLayers[index].length;i++)
+    {
+        map.addLayer(markerLayers[index][i]);
+    }
+}
+
+export function hiddenmarker(index) {
+    console.log(index);
+    index = index*1;
+    for(let i = 0 ; i < markerLayers[index].length;i++)
+    {
+        map.removeLayer(markerLayers[index][i]);
+        
+    }
+}
+
+
+let aniMaxCount = 0;
+let aniCount = 0;
+export function anistart(value) {
+    aniCount = 0;
+    aniMaxCount = value;
+    console.log('anistart');
+}
+
+
+
 window.moveview = moveview;
 window.addplanview = addplanview;
 window.clearplanview = clearplanview;
 window.setplanviewCount = setplanviewCount;
 window.SetOpacity = SetOpacity;
 window.Removeplanview = Removeplanview;
-
-
-
-
-// const heatmaps = [];
-
-// export function heatmapCreate(Lats,Logs,values) {
-
-//     const datas = new ol.source.Vector();
-//     console.log(values);
-
-//     for(let i = 0 ; i < Lats.length;i++)
-//     {
-//         const point = ol.proj.transform([Logs[i],Lats[i]], 'EPSG:4326','EPSG:3857');
-//         // console.log(point);
-//         const feature = new ol.Feature({
-//             geometry: new ol.geom.Point([point[0],point[1]]),
-//             weight: values[i], // 가중치 설정
-//         });
-//         datas.addFeature(feature);
-//     }
-
-
-//     const heatmapLayer = new ol.layer.Heatmap({
-//         source: datas,
-//         blur:4, // 블러 크기
-//         radius: 4.5, // 각 포인트의 반경
-//         // weight: (feature) => feature.get('weight'), // 피처의 가중치 값 사용
-//         weight: function (feature) {
-//             // 각 데이터 포인트에 고정된 weight 값을 반환
-//             const magnitude = feature.get('weight'); // 예: GeoJSON의 magnitude 필드
-//             return magnitude; // 고정된 정규화 값 (0~1 범위)
-//         },
-//         gradient: ['#ffffff', '#dddddd', '#bbbbbb', '#888888', '#555555', '#000000'],
-//     });
-
-//     heatmaps.push(heatmapLayer);
-//     map.addLayer(heatmapLayer);
-
-// }
-
-// map.getView().on('change:resolution', () => {
-//     const zoom = map.getView().getZoom();
-
-//     // const value = 0.2909*Math.pow(zoom,2) - 11.551*zoom + 115.35;
-//     // for(let i = 0 ; i < heatmaps.length;i++)
-//     // {
-//     //     heatmaps[i].setRadius(value); // 줌 레벨에 따라 고정된 반경 설정
-//     // }
-//     console.log(zoom);
-//     // console.log(value);
-// });
-
-// window.heatmapCreate = heatmapCreate;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+window.setmarker = setmarker;
+window.onmarker = onmarker;
+window.hiddenmarker = hiddenmarker;
+window.anistart = anistart;
 
